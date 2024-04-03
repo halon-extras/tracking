@@ -40,6 +40,7 @@ The following properties are available in the **tracking** array.
 - secret `array` - The secret settings **Required**
 - click `boolean` - If click tracking should be enabled
 - open `boolean` - If open tracking should be enabled
+- unsubscribe `boolean` - If one-click list unsubscribe should be enabled
 - additional `array` - Additional data to store in the link
 
 The following properties are available in the **secret** array.
@@ -55,6 +56,7 @@ import { enable_tracking } from "extras://tracking";
 $tracking = [
     "click" => true,
     "open" => true,
+    "unsubscribe" => false,
     "url" => "http://example.com",
     "secret" => [
         "id" => 1,

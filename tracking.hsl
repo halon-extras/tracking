@@ -1,65 +1,82 @@
 function enable_tracking($mail, $recipient, $tracking)
 {
-    if ((!$tracking["click"] and !$tracking["open"]) or !$tracking["url"] or !$tracking["secret"] or !$tracking["secret"]["id"] or !$tracking["secret"]["key"])
+    if ((!$tracking["click"] and !$tracking["open"] and !$tracking["unsubscribe"]) or !$tracking["url"] or !$tracking["secret"] or !$tracking["secret"]["id"] or !$tracking["secret"]["key"])
         return;
 
     $messageid = $mail->getHeader("Message-ID");
 
-    foreach ($mail->findByType("^text/(html|x-amp-html)$") ?: $mail->getType() == "text/html" or $mail->getType() == "text/x-amp-html" ? [$mail] : [] as $a)
+    if ($tracking["click"] or $tracking["open"])
     {
-        if ($a->getHeader("Content-Disposition") and $a->getHeader("Content-Disposition") != "inline")
-            continue;
-
-        $old = $a->getBody();
-        if (!is_string($old))
-            continue;
-
-        $new = $old;
-
-        if ($tracking["click"])
+        foreach ($mail->findByType("^text/(html|x-amp-html)$") ?: $mail->getType() == "text/html" or $mail->getType() == "text/x-amp-html" ? [$mail] : [] as $a)
         {
-            $new = pcre_replace(''/<a\s*(?:tracking="?([^"\s]*)"?)?[^>]*?(href\s*=\s*((['"])(?<href>.+?)(['"])|(?<href2>[^\s>]+)))[^>]*?>/gis'', function ($f) closure ($messageid, $recipient, $tracking)
+            if ($a->getHeader("Content-Disposition") and $a->getHeader("Content-Disposition") != "inline")
+                continue;
+
+            $old = $a->getBody();
+            if (!is_string($old))
+                continue;
+
+            $new = $old;
+
+            if ($tracking["click"])
             {
-                $url = $f[5] ?: $f[6];
+                $new = pcre_replace(''/<a\s*(?:tracking="?([^"\s]*)"?)?[^>]*?(href\s*=\s*((['"])(?<href>.+?)(['"])|(?<href2>[^\s>]+)))[^>]*?>/gis'', function ($f) closure ($messageid, $recipient, $tracking)
+                {
+                    $url = $f[5] ?: $f[6];
 
-                if (substr($url, 0, strlen($tracking["url"])) == $tracking["url"])
-                    return $f[0];
-                if ($f[1] ? str_lower($f[1]) === "off" ? true : false : !$tracking["click"])
-                    return $f[0];
-                if (($scheme = pcre_match("^([a-z]+):", strtolower($url))) and $scheme[1] != "http" and $scheme[1] != "https")
-                    return $f[0];
+                    if (substr($url, 0, strlen($tracking["url"])) == $tracking["url"])
+                        return $f[0];
+                    if ($f[1] ? str_lower($f[1]) === "off" ? true : false : !$tracking["click"])
+                        return $f[0];
+                    if (($scheme = pcre_match("^([a-z]+):", strtolower($url))) and $scheme[1] != "http" and $scheme[1] != "https")
+                        return $f[0];
 
+                    $id = pack("C", $tracking["secret"]["id"]);
+                    $data = ["r" => $recipient, "m" => $messageid, "u" => $url];
+                    if ($tracking["additional"])
+                        $data["a"] = $tracking["additional"];
+                    $data = json_encode($data);
+                    $hmac = hmac_sha2($tracking["secret"]["key"], $data, 256, ["binary" => true]);
+                    $data = zlib_compress($data, 9, -15);
+                    $base64 = str_replace("=", "", str_replace("/", "_", str_replace("+", "-", base64_encode($id.$hmac.$data))));
+
+                    return str_replace($f[2], ''href="''.$tracking["url"].''/c/''.$base64.''"'', $f[0]);
+                }, $new);   
+            }
+
+            if ($tracking["open"])
+            {
                 $id = pack("C", $tracking["secret"]["id"]);
-                $data = ["r" => $recipient, "m" => $messageid, "u" => $url];
+                $data = ["r" => $recipient, "m" => $messageid];
                 if ($tracking["additional"])
                     $data["a"] = $tracking["additional"];
                 $data = json_encode($data);
                 $hmac = hmac_sha2($tracking["secret"]["key"], $data, 256, ["binary" => true]);
                 $data = zlib_compress($data, 9, -15);
                 $base64 = str_replace("=", "", str_replace("/", "_", str_replace("+", "-", base64_encode($id.$hmac.$data))));
+                $img = ''<img src="''.$tracking["url"].''/o/''.$base64.''" width="1" height="1"/>'';
+                $found = false;
+                $new = pcre_replace(''/(<\/body>)/i'', function ($f) closure ($found, $img) { $found = true; return $img.$f[0]; }, $new);
+                if (!$found)
+                    $new = $new.$img;
+            }
 
-                return str_replace($f[2], ''href="''.$tracking["url"].''/c/''.$base64.''"'', $f[0]);
-            }, $new);   
+            if ($new != $old)
+                $a->setBody($new);
         }
+    }
 
-        if ($tracking["open"])
-        {
-            $id = pack("C", $tracking["secret"]["id"]);
-            $data = ["r" => $recipient, "m" => $messageid];
-            if ($tracking["additional"])
-                $data["a"] = $tracking["additional"];
-            $data = json_encode($data);
-            $hmac = hmac_sha2($tracking["secret"]["key"], $data, 256, ["binary" => true]);
-            $data = zlib_compress($data, 9, -15);
-            $base64 = str_replace("=", "", str_replace("/", "_", str_replace("+", "-", base64_encode($id.$hmac.$data))));
-            $img = ''<img src="''.$tracking["url"].''/o/''.$base64.''" width="1" height="1"/>'';
-            $found = false;
-            $new = pcre_replace(''/(<\/body>)/i'', function ($f) closure ($found, $img) { $found = true; return $img.$f[0]; }, $new);
-            if (!$found)
-                $new = $new.$img;
-        }
-
-        if ($new != $old)
-            $a->setBody($new);
+    if ($tracking["unsubscribe"] and !$mail->getHeader("List-Unsubscribe"))
+    {
+        $id = pack("C", $tracking["secret"]["id"]);
+        $data = ["r" => $recipient, "m" => $messageid];
+        if ($tracking["additional"])
+            $data["a"] = $tracking["additional"];
+        $data = json_encode($data);
+        $hmac = hmac_sha2($tracking["secret"]["key"], $data, 256, ["binary" => true]);
+        $data = zlib_compress($data, 9, -15);
+        $base64 = str_replace("=", "", str_replace("/", "_", str_replace("+", "-", base64_encode($id.$hmac.$data))));
+        $mail->setHeader("List-Unsubscribe", "<".$tracking["url"].''/u/''.$base64.">");
+        $mail->setHeader("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
     }
 }
