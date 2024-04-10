@@ -4,6 +4,9 @@ Rewrite URL:s and add tracking pixels to track user engagement.
 
 This HSL module is compatible with the [payload format](https://docs.halon.io/submission/tracking_payload.html) used by the extended version of the [HTTP submission API](https://docs.halon.io/submission/).
 
+> [!WARNING]
+> This requires multipart processing to be enabled on your message flow in `smtpd-app.yaml` - see [here](https://docs.halon.io/manual/config_tuning.html?highlight=multipart#servers-phases-data-multipart). 
+
 ## Installation
 
 Follow the [instructions](https://docs.halon.io/manual/comp_install.html#installation) in our manual to add our package repository and then run the below command.
