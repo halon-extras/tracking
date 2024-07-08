@@ -78,3 +78,13 @@ foreach ($recipients as $recipient) {
 
 > [!WARNING]
 > This requires multipart processing to be enabled on your message flow in `smtpd-app.yaml` - see [here](https://docs.halon.io/manual/config_tuning.html?highlight=multipart#servers-phases-data-multipart). 
+
+## Exclude links from tracking
+
+Links can be excluded from tracking by adding the `tracking="off"` attribute to the anchor tag.
+
+```html
+
+<a tracking="off" href="https://halon.io">Halon Website</a>
+
+```
