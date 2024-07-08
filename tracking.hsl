@@ -56,7 +56,7 @@ function enable_tracking($mail, $recipient, $tracking)
                 $hmac = hmac_sha2($tracking["secret"]["key"], $data, 256, ["binary" => true]);
                 $data = zlib_compress($data, 9, -15);
                 $base64 = str_replace("=", "", str_replace("/", "_", str_replace("+", "-", base64_encode($id.$hmac.$data))));
-                $img = ''<img src="''.$tracking["url"].''/o/''.$base64.''" width="1" height="1"/>'';
+                $img = ($a->getType() == "text/x-amp-html" ? ''<amp-img src="'' : ''<img src="'').$tracking["url"].''/o/''.$base64.''" width="1" height="1"/>'';
                 $found = false;
                 $new = pcre_replace(#/(<\/body>)/i, function ($f) closure ($found, $img) { $found = true; return $img.$f[0]; }, $new);
                 if (!$found)
